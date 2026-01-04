@@ -82,12 +82,14 @@ const GooseCard: React.FC<{
   const [isHonking, setIsHonking] = useState(false);
 
   const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
-    // 防止移动端双击缩放或其他默认行为
     if (e.cancelable) e.preventDefault();
     
+    // 如果被遮挡（黑白状态），点击仅触发抖动提示，不执行逻辑
     if (item.isCovered || item.status !== 'board') {
-      setIsWiggling(true);
-      setTimeout(() => setIsWiggling(false), 500);
+      if (item.status === 'board') {
+        setIsWiggling(true);
+        setTimeout(() => setIsWiggling(false), 300);
+      }
       return;
     }
     
@@ -99,26 +101,31 @@ const GooseCard: React.FC<{
   };
 
   const getShaped3DStyle = (): React.CSSProperties => {
+    // 下层黑白动物样式：彻底置灰、低亮度、不具备3D厚度感
     if (item.isCovered) {
       return {
-        filter: 'brightness(0.2) grayscale(0.8) opacity(0.5)',
-        transform: `translateY(8px) scale(0.9)`,
-        transition: 'all 0.4s ease'
+        filter: 'grayscale(1) brightness(0.4) opacity(0.6)',
+        transform: `translateY(4px) scale(0.95)`,
+        transition: 'all 0.4s ease',
+        pointerEvents: 'auto', // 仍允许点击以显示抖动提示
       };
     }
 
-    const depth = 6;
+    // 上层彩色动物样式：高亮彩色、具备3D厚度和投影
+    const depth = isTray ? 0 : 6;
     let shadowStr = '';
-    for (let i = 1; i <= depth; i++) {
-      shadowStr += `0px ${i}px 0px rgba(0,0,0,0.15)${i === depth ? '' : ','}`;
+    if (depth > 0) {
+      for (let i = 1; i <= depth; i++) {
+        shadowStr += `0px ${i}px 0px rgba(0,0,0,0.2)${i === depth ? '' : ','}`;
+      }
     }
 
     return {
       textShadow: shadowStr,
       transform: isTray 
         ? 'scale(0.8)' 
-        : `translateY(-6px) rotateZ(${item.id % 2 === 0 ? '4deg' : '-4deg'})`,
-      filter: 'drop-shadow(0 10px 8px rgba(0,0,0,0.2))',
+        : `translateY(-6px) rotateZ(${item.id % 2 === 0 ? '2deg' : '-2deg'})`,
+      filter: isTray ? 'none' : 'drop-shadow(0 10px 8px rgba(0,0,0,0.2))',
       transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
     };
   };
@@ -128,7 +135,7 @@ const GooseCard: React.FC<{
       onClick={handleClick}
       onTouchEnd={handleClick}
       className={`absolute flex items-center justify-center transition-all touch-none
-        ${isWiggling ? 'animate-pulse scale-110' : ''}
+        ${isWiggling ? 'animate-pulse' : ''}
         ${isHonking ? 'scale-150 -rotate-12' : ''}`}
       style={{
         width: ITEM_SIZE,
@@ -137,6 +144,7 @@ const GooseCard: React.FC<{
         top: isTray ? 'auto' : item.y,
         zIndex: isTray ? 100 : item.z * 10,
         position: isTray ? 'relative' : 'absolute',
+        cursor: item.isCovered ? 'not-allowed' : 'pointer',
         ...getShaped3DStyle()
       }}
     >
@@ -146,10 +154,11 @@ const GooseCard: React.FC<{
         </div>
       )}
 
-      <span className={`select-none text-6xl cursor-pointer ${gooseType?.color}`}>
+      <span className={`select-none text-6xl transform transition-colors ${item.isCovered ? 'text-gray-400' : (gooseType?.color || 'text-white')}`}>
         {gooseType?.emoji}
       </span>
       
+      {/* 仅上层BOSS显示徽章 */}
       {gooseType?.isGoose && !item.isCovered && !isTray && (
         <div className="absolute -top-2 -right-2 bg-yellow-500 text-[10px] font-black px-1.5 py-0.5 rounded-lg text-white shadow-lg border-2 border-white animate-bounce-subtle z-50">
           BOSS
@@ -174,13 +183,28 @@ const App: React.FC = () => {
   const comboTimeout = useRef<number | null>(null);
   const currentLevel = LEVELS[Math.min(levelIdx, LEVELS.length - 1)];
 
+  // 核心遮挡逻辑
+  const checkCoverage = useCallback((all: GameItem[]) => {
+    return all.map(item => {
+      if (item.status !== 'board') return { ...item, isCovered: false };
+      return {
+        ...item,
+        isCovered: all.some(other => 
+          other.status === 'board' && 
+          other.z > item.z && 
+          Math.abs(other.x - item.x) < ITEM_SIZE * 0.55 && // 判定范围略大于图片，确保边缘也能遮挡
+          Math.abs(other.y - item.y) < ITEM_SIZE * 0.55
+        )
+      };
+    });
+  }, []);
+
   const initLevel = useCallback((idx: number) => {
     const config = LEVELS[Math.min(idx, LEVELS.length - 1)];
     const typesToUse = GOOSE_TYPES.slice(0, config.uniqueTypes);
     let generated: GameItem[] = [];
     let idCounter = 0;
     
-    // 适配小屏幕：动态计算高度
     const viewHeight = window.innerHeight;
     const SAFE_BOARD_HEIGHT = Math.min(BOARD_HEIGHT, viewHeight - 280); 
 
@@ -205,51 +229,25 @@ const App: React.FC = () => {
       }
     }
 
-    const checkCoverage = (all: GameItem[]) => {
-      return all.map(item => {
-        if (item.status !== 'board') return { ...item, isCovered: false };
-        return {
-          ...item,
-          isCovered: all.some(other => 
-            other.status === 'board' && 
-            other.z > item.z && 
-            Math.abs(other.x - item.x) < ITEM_SIZE * 0.5 && 
-            Math.abs(other.y - item.y) < ITEM_SIZE * 0.5
-          )
-        };
-      });
-    };
-
     setItems(checkCoverage(generated));
     setTray([]);
     setHoldingArea([]);
     setGameState('playing');
     setScore(0);
     setCombo(0);
-  }, []);
+  }, [checkCoverage]);
 
   const handleItemClick = (clickedItem: GameItem) => {
-    if (gameState !== 'playing' || tray.length >= TRAY_SIZE) return;
+    if (gameState !== 'playing' || tray.length >= TRAY_SIZE || clickedItem.isCovered) return;
+    
     const newTray = [...tray, { ...clickedItem, status: 'tray' as const }];
     const newItems = items.map(item => 
       item.id === clickedItem.id ? { ...item, status: 'tray' as const } : item
     );
-    const updateCoverage = (all: GameItem[]) => {
-      return all.map(item => {
-        if (item.status !== 'board') return { ...item, isCovered: false };
-        return {
-          ...item,
-          isCovered: all.some(other => 
-            other.status === 'board' && 
-            other.z > item.z && 
-            Math.abs(other.x - item.x) < ITEM_SIZE * 0.5 && 
-            Math.abs(other.y - item.y) < ITEM_SIZE * 0.5
-          )
-        };
-      });
-    };
-    setItems(updateCoverage(newItems));
+    
+    setItems(checkCoverage(newItems));
     setTray(newTray);
+    
     setCombo(c => c + 1);
     if (comboTimeout.current) clearTimeout(comboTimeout.current);
     comboTimeout.current = window.setTimeout(() => setCombo(0), 1200);
@@ -295,7 +293,8 @@ const App: React.FC = () => {
       const boardItems = prev.filter(i => i.status === 'board');
       const types = boardItems.map(i => i.type).sort(() => Math.random() - 0.5);
       let typeIdx = 0;
-      return prev.map(item => item.status === 'board' ? { ...item, type: types[typeIdx++] } : item);
+      const updated = prev.map(item => item.status === 'board' ? { ...item, type: types[typeIdx++] } : item);
+      return checkCoverage(updated);
     });
     setBoosters(b => ({ ...b, shuffle: b.shuffle - 1 }));
   };
@@ -306,18 +305,7 @@ const App: React.FC = () => {
     setTray(prev => prev.slice(0, -1));
     setItems(prev => {
       const updated = prev.map(i => i.id === last.id ? { ...i, status: 'board' as const } : i);
-      return updated.map(item => {
-        if (item.status !== 'board') return { ...item, isCovered: false };
-        return {
-          ...item,
-          isCovered: updated.some(other => 
-            other.status === 'board' && 
-            other.z > item.z && 
-            Math.abs(other.x - item.x) < ITEM_SIZE * 0.45 && 
-            Math.abs(other.y - item.y) < ITEM_SIZE * 0.45
-          )
-        };
-      });
+      return checkCoverage(updated);
     });
     setBoosters(b => ({ ...b, undo: b.undo - 1 }));
   };
@@ -376,11 +364,11 @@ const App: React.FC = () => {
                 {gameState === 'won' ? '鹅中之神!' : (gameState === 'lost' ? '槽位爆满!' : '抓大鹅大师')}
               </h2>
               <p className="text-slate-500 mb-8 text-sm font-bold">
-                {gameState === 'won' ? '你征服了所有的大鹅！' : '糟了，托盘装不下啦。'}
+                {gameState === 'won' ? '你征服了所有的大鹅！' : '彩色的大鹅才能抓，加油！'}
               </p>
               <button 
                 onClick={async () => {
-                  await musicPlayer.init(); // 触发手机端音频解锁
+                  await musicPlayer.init(); 
                   if (gameState === 'won') {
                     setLevelIdx(v => v + 1);
                     initLevel(levelIdx + 1);
