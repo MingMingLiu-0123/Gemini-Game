@@ -3,10 +3,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Catch the Goose! (抓大鹅)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>抓大鹅 - 手机版</title>
+    <!-- 添加 polyfill 确保旧款手机浏览器支持 importmap -->
+    <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.1/dist/es-module-shims.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        :root {
+            --sat: env(safe-area-inset-top);
+            --sab: env(safe-area-inset-bottom);
+        }
         body {
             margin: 0;
             padding: 0;
@@ -14,6 +20,12 @@
             background-color: #f0fdf4;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
+            /* 适配 iOS 高度问题 */
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
+        #root {
+            height: 100%;
         }
         @keyframes bounce-subtle {
             0%, 100% { transform: translateY(0); }
@@ -22,16 +34,16 @@
         .animate-bounce-subtle {
             animation: bounce-subtle 2s infinite ease-in-out;
         }
-        .tray-slot {
-            aspect-ratio: 1 / 1;
-        }
-        /* Custom scrollbar for vault area */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
         .no-scrollbar {
             -ms-overflow-style: none;
             scrollbar-width: none;
+        }
+        /* 增加点击反馈动画 */
+        .active-press:active {
+            transform: scale(0.92);
         }
     </style>
 <script type="importmap">
@@ -46,7 +58,6 @@
 </head>
 <body>
     <div id="root"></div>
-    <!-- Entry point script -->
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>
