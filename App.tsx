@@ -103,8 +103,8 @@ const GooseCard: React.FC<{
   const getShaped3DStyle = (): React.CSSProperties => {
     if (item.isCovered) {
       return {
-        filter: 'grayscale(1) brightness(0.2) opacity(0.6)',
-        transform: `translateY(4px) scale(0.95)`,
+        filter: 'grayscale(1) brightness(0.2) opacity(0.5)',
+        transform: `translateY(4px) scale(0.92)`,
         transition: 'all 0.4s ease',
       };
     }
@@ -175,16 +175,17 @@ const App: React.FC = () => {
   const comboTimeout = useRef<number | null>(null);
   const currentLevel = LEVELS[Math.min(levelIdx, LEVELS.length - 1)];
 
-  // 响应式缩放计算
+  // 响应式缩放计算优化
   const updateScale = useCallback(() => {
     if (gameAreaRef.current) {
       const containerWidth = gameAreaRef.current.clientWidth;
       const containerHeight = gameAreaRef.current.clientHeight;
       
-      // 计算水平和垂直缩放比例，取最小值以确保内容不溢出
-      const scaleX = (containerWidth - 20) / BOARD_WIDTH;
-      const scaleY = (containerHeight - 20) / BOARD_HEIGHT;
-      const finalScale = Math.min(scaleX, scaleY, 1.2); // 最大放大到1.2倍
+      // 增加更多的内间距，确保安全
+      const scaleX = (containerWidth - 30) / BOARD_WIDTH;
+      const scaleY = (containerHeight - 30) / BOARD_HEIGHT;
+      // 取较小值进行等比例缩放，并设置上限
+      const finalScale = Math.min(scaleX, scaleY, 1.15); 
       
       setBoardScale(finalScale);
     }
@@ -192,8 +193,12 @@ const App: React.FC = () => {
 
   useLayoutEffect(() => {
     updateScale();
+    const timer = setTimeout(updateScale, 100); // 针对微信加载延迟的二次校验
     window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
+    return () => {
+      window.removeEventListener('resize', updateScale);
+      clearTimeout(timer);
+    };
   }, [updateScale]);
 
   const checkCoverage = useCallback((all: RuntimeGameItem[]) => {
@@ -217,20 +222,22 @@ const App: React.FC = () => {
     let generated: RuntimeGameItem[] = [];
     let idCounter = 0;
     
-    // 大鹅生成逻辑：保持在逻辑坐标 BOARD_WIDTH / BOARD_HEIGHT 之内
+    // 大鹅生成逻辑：收紧生成范围，避免贴边
     for (let i = 0; i < config.totalSets; i++) {
       const type = typesToUse[Math.floor(Math.random() * typesToUse.length)];
       for (let j = 0; j < 3; j++) {
+        // 使用更集中的网格分布
         const gridX = Math.floor(Math.random() * 5);
-        const gridY = Math.floor(Math.random() * 6); 
-        const offsetX = (Math.random() - 0.5) * 50;
-        const offsetY = (Math.random() - 0.5) * 50;
+        const gridY = Math.floor(Math.random() * 5); 
+        const offsetX = (Math.random() - 0.5) * 40;
+        const offsetY = (Math.random() - 0.5) * 60;
         
         generated.push({
           id: idCounter++,
           type: type.id,
-          x: Math.max(5, Math.min(BOARD_WIDTH - ITEM_SIZE - 5, gridX * 60 + 10 + offsetX)),
-          y: Math.max(5, Math.min(BOARD_HEIGHT - ITEM_SIZE - 5, gridY * 70 + 10 + offsetY)),
+          // 逻辑坐标范围控制：X(10-270), Y(20-440)
+          x: Math.max(10, Math.min(BOARD_WIDTH - ITEM_SIZE - 10, gridX * 55 + 20 + offsetX)),
+          y: Math.max(20, Math.min(BOARD_HEIGHT - ITEM_SIZE - 20, gridY * 80 + 20 + offsetY)),
           z: Math.floor(Math.random() * config.layers),
           status: 'board',
           isCovered: false
@@ -340,25 +347,24 @@ const App: React.FC = () => {
   return (
     <div className={`flex flex-col h-full w-full max-w-2xl mx-auto bg-gradient-to-b ${currentLevel.bgGradient} transition-all duration-1000 overflow-hidden relative shadow-2xl`}>
       
-      {/* HUD Header */}
-      <div className="px-4 py-3 pt-[calc(0.75rem+var(--sat))] flex justify-between items-center bg-white/60 backdrop-blur-xl z-[100] border-b border-white/50">
+      {/* HUD Header - flex-shrink-0 关键点 */}
+      <div className="flex-shrink-0 px-4 py-3 pt-[calc(0.75rem+var(--sat))] flex justify-between items-center bg-white/60 backdrop-blur-xl z-[100] border-b border-white/50">
         <div className="flex flex-col">
           <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">{currentLevel.name}</span>
           <span className="text-3xl font-black text-slate-900 drop-shadow-sm tabular-nums">{score}</span>
         </div>
         <div className="flex items-center gap-2">
-           <button onClick={toggleMusic} className="w-10 h-10 rounded-xl bg-white/80 shadow-sm flex items-center justify-center text-xl border border-white active-press transition-transform">
+           <button onClick={toggleMusic} className="w-10 h-10 rounded-xl bg-white/80 shadow-sm flex items-center justify-center text-xl border border-white active-press">
              {musicEnabled ? '🎵' : '🔇'}
            </button>
            <div className="flex flex-col items-end">
               <div className="bg-slate-900 text-white px-3 py-1 rounded-xl text-xs font-black shadow-lg">LV {levelIdx + 1}</div>
-              {combo > 1 && <div className="text-orange-600 font-black italic text-[10px] mt-1 animate-pulse">x{combo} COMBO 🔥</div>}
            </div>
         </div>
       </div>
 
-      {/* Game Area Container - 重要适配点 */}
-      <div ref={gameAreaRef} className="relative flex-1 w-full overflow-hidden flex items-center justify-center p-4">
+      {/* Game Area Container - flex-1 确保占据剩余空间且不溢出 */}
+      <div ref={gameAreaRef} className="relative flex-1 w-full overflow-hidden flex items-center justify-center p-2">
         <div 
           className="relative origin-center transition-transform duration-300" 
           style={{ 
@@ -379,7 +385,7 @@ const App: React.FC = () => {
         {gameState !== 'playing' && (
           <div className="absolute inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-md px-6">
             <div className="bg-white p-8 rounded-[3rem] shadow-2xl text-center w-full max-w-[300px] animate-in zoom-in-95 duration-300">
-              <div className="text-8xl mb-6 transform hover:scale-110 transition-transform cursor-default">
+              <div className="text-8xl mb-6">
                 {gameState === 'won' ? '🥇' : (gameState === 'lost' ? '😵' : '🪿')}
               </div>
               <h2 className="text-3xl font-black mb-2 text-slate-900">
@@ -398,7 +404,7 @@ const App: React.FC = () => {
                     initLevel(levelIdx);
                   }
                 }}
-                className="w-full py-4 bg-slate-900 text-white font-black text-2xl rounded-[2rem] shadow-xl active:translate-y-1 transition-all hover:bg-slate-800"
+                className="w-full py-4 bg-slate-900 text-white font-black text-2xl rounded-[2rem] shadow-xl active:translate-y-1 transition-all"
               >
                 {gameState === 'start' ? '立刻出发' : '重战江湖'}
               </button>
@@ -407,8 +413,8 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Bottom UI - 适配底部安全区 */}
-      <div className="bg-white/90 backdrop-blur-3xl px-4 pt-4 pb-[calc(1rem+var(--sab))] rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.08)] z-[150] border-t border-white/50">
+      {/* Bottom UI - flex-shrink-0 关键点 */}
+      <div className="flex-shrink-0 bg-white/90 backdrop-blur-3xl px-4 pt-4 pb-[calc(1rem+var(--sab))] rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.08)] z-[150] border-t border-white/50">
         
         <div className="flex justify-around mb-4 px-2 gap-2">
           <BoosterBtn icon="🔙" label="撤销" count={boosters.undo} onClick={useUndo} color="from-blue-500 to-blue-700" />
