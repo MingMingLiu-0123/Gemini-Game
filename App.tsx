@@ -168,7 +168,7 @@ const GooseCard: React.FC<{
 
 const App: React.FC = () => {
   const [levelIdx, setLevelIdx] = useState(0);
-  const [gameState, setGameState] = useState<GameState>('start');
+  const [gameState, setGameState] = useState('start');
   const [items, setItems] = useState<GameItem[]>([]);
   const [tray, setTray] = useState<GameItem[]>([]);
   const [holdingArea, setHoldingArea] = useState<GameItem[]>([]);
@@ -442,29 +442,29 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* COMPACT BOTTOM UI - Responsive and Stylish */}
-      <div className="bg-white/90 backdrop-blur-3xl px-8 pt-6 pb-12 rounded-t-[4.5rem] shadow-[0_-25px_60px_rgba(0,0,0,0.15)] z-[150] border-t border-white/60">
+      {/* COMPACT BOTTOM UI */}
+      <div className="bg-white/90 backdrop-blur-3xl px-8 pt-4 pb-10 rounded-t-[4rem] shadow-[0_-25px_60px_rgba(0,0,0,0.15)] z-[150] border-t border-white/60">
         
-        {/* Shrunk Booster Buttons */}
-        <div className="flex justify-around mb-8 px-2 gap-4">
+        {/* Shrunk Booster Buttons - Smaller dimension and tighter spacing */}
+        <div className="flex justify-around mb-6 px-4 gap-2">
           <BoosterBtn icon="🔙" label="撤销" count={boosters.undo} onClick={useUndo} color="from-blue-500 to-blue-700" shadow="shadow-blue-900/30" />
           <BoosterBtn icon="🔀" label="洗牌" count={boosters.shuffle} onClick={useShuffle} color="from-purple-500 to-purple-700" shadow="shadow-purple-900/30" />
           <BoosterBtn icon="🧺" label="移出" count={boosters.clear} onClick={useClear} color="from-orange-500 to-orange-700" shadow="shadow-orange-900/30" />
         </div>
 
         {/* High-End Tray Container */}
-        <div className="relative bg-slate-200/50 p-4 rounded-[3.5rem] border-b-4 border-slate-300 shadow-inner flex gap-2 justify-center items-center min-h-[80px] border border-white/30">
+        <div className="relative bg-slate-200/50 p-3 rounded-[3rem] border-b-4 border-slate-300 shadow-inner flex gap-1.5 justify-center items-center min-h-[72px] border border-white/30">
           {Array.from({ length: TRAY_SIZE }).map((_, i) => (
-            <div key={i} className="flex-1 max-w-[48px] aspect-square bg-white/70 rounded-2xl border-2 border-dashed border-slate-300 flex items-center justify-center relative shadow-sm transition-all overflow-hidden">
+            <div key={i} className="flex-1 max-w-[44px] aspect-square bg-white/70 rounded-2xl border-2 border-dashed border-slate-300 flex items-center justify-center relative shadow-sm transition-all overflow-hidden">
               {tray[i] && (
-                <div className="transform scale-[0.8] animate-in zoom-in slide-in-from-top-6 duration-300">
+                <div className="transform scale-[0.75] animate-in zoom-in slide-in-from-top-6 duration-300">
                    <GooseCard item={tray[i]} onClick={() => {}} isTray />
                 </div>
               )}
             </div>
           ))}
           {tray.length >= 6 && (
-            <div className="absolute -top-5 right-10 bg-red-600 text-white text-[11px] px-4 py-1 rounded-full font-black animate-bounce shadow-2xl border-2 border-white z-[200]">
+            <div className="absolute -top-4 right-10 bg-red-600 text-white text-[10px] px-3 py-1 rounded-full font-black animate-bounce shadow-2xl border-2 border-white z-[200]">
               小心爆满!
             </div>
           )}
@@ -472,15 +472,15 @@ const App: React.FC = () => {
 
         {/* Fancy Vault Area */}
         {holdingArea.length > 0 && (
-          <div className="mt-6 p-3 bg-white/50 rounded-[2.5rem] border border-white/80 flex gap-4 overflow-x-auto shadow-sm backdrop-blur-md no-scrollbar">
+          <div className="mt-5 p-2.5 bg-white/50 rounded-[2rem] border border-white/80 flex gap-4 overflow-x-auto shadow-sm backdrop-blur-md no-scrollbar">
              {holdingArea.map(item => (
-               <div key={item.id} onClick={() => handleItemClick(item)} className="relative w-12 h-12 shrink-0 flex items-center justify-center active:scale-95 transition-all bg-white/40 rounded-xl shadow-inner">
-                  <div className="transform scale-[0.65]">
+               <div key={item.id} onClick={() => handleItemClick(item)} className="relative w-10 h-10 shrink-0 flex items-center justify-center active:scale-95 transition-all bg-white/40 rounded-xl shadow-inner">
+                  <div className="transform scale-[0.6]">
                     <GooseCard item={item} onClick={() => {}} isTray />
                   </div>
                </div>
              ))}
-             <span className="text-[10px] text-slate-500 font-black self-center ml-2 uppercase opacity-40 tracking-widest rotate-90 shrink-0">仓库 Vault</span>
+             <span className="text-[9px] text-slate-500 font-black self-center ml-1 uppercase opacity-40 tracking-widest rotate-90 shrink-0">仓库 Vault</span>
           </div>
         )}
       </div>
@@ -492,12 +492,12 @@ const BoosterBtn: React.FC<{ icon: string; label: string; count: number; onClick
   <button 
     onClick={onClick} 
     disabled={count <= 0}
-    className={`group flex flex-col items-center gap-2 disabled:opacity-20 transition-all active:scale-90`}
+    className={`group flex flex-col items-center gap-1.5 disabled:opacity-20 transition-all active:scale-90`}
   >
-    <div className={`w-16 h-16 bg-gradient-to-br ${color} rounded-[1.8rem] flex items-center justify-center text-3xl shadow-[0_8px_0_rgba(0,0,0,0.2),0_15px_30px_rgba(0,0,0,0.15)] ${shadow} transition-all border border-white/20 active:translate-y-2 active:shadow-none`}>
+    <div className={`w-12 h-12 bg-gradient-to-br ${color} rounded-2xl flex items-center justify-center text-2xl shadow-[0_4px_0_rgba(0,0,0,0.2),0_8px_16px_rgba(0,0,0,0.15)] ${shadow} transition-all border border-white/20 active:translate-y-1 active:shadow-none`}>
       <span className="filter drop-shadow-lg transform group-active:scale-90">{icon}</span>
     </div>
-    <span className="text-[12px] font-black uppercase text-slate-600 tracking-tighter opacity-90">{label}({count})</span>
+    <span className="text-[10px] font-black uppercase text-slate-600 tracking-tighter opacity-90">{label}({count})</span>
   </button>
 );
 
