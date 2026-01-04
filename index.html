@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>抓大鹅 - 手机版</title>
-    <!-- 添加 polyfill 确保旧款手机浏览器支持 importmap -->
+    <title>抓大鹅 - 手机全机型适配版</title>
     <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.1/dist/es-module-shims.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -13,19 +12,26 @@
             --sat: env(safe-area-inset-top);
             --sab: env(safe-area-inset-bottom);
         }
+        * {
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+        }
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background-color: #f0fdf4;
+            background-color: #000; /* 背景设为黑色防止露白 */
             user-select: none;
             -webkit-tap-highlight-color: transparent;
-            /* 适配 iOS 高度问题 */
             height: 100vh;
-            height: -webkit-fill-available;
+            height: 100svh; /* 适配移动端动态高度 */
         }
         #root {
             height: 100%;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            background-color: #f0fdf4;
         }
         @keyframes bounce-subtle {
             0%, 100% { transform: translateY(0); }
@@ -41,9 +47,12 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
-        /* 增加点击反馈动画 */
         .active-press:active {
             transform: scale(0.92);
+        }
+        /* 适配横屏提醒 */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .landscape-warning { display: flex !important; }
         }
     </style>
 <script type="importmap">
@@ -58,6 +67,10 @@
 </head>
 <body>
     <div id="root"></div>
+    <div class="landscape-warning fixed inset-0 bg-slate-900 z-[1000] hidden flex-col items-center justify-center text-white p-6 text-center">
+        <span class="text-4xl mb-4">📱</span>
+        <p className="font-bold">请竖屏使用手机以获得最佳游戏体验</p>
+    </div>
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>
