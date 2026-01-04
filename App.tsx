@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GOOSE_TYPES, TRAY_SIZE, LEVELS, ITEM_SIZE, BOARD_WIDTH, BOARD_HEIGHT } from './constants';
 import { GameItem, GameState } from './types';
 
-// 增强版音频引擎，适配移动端
 class SimpleMusic {
   private ctx: AudioContext | null = null;
   private isPlaying: boolean = false;
@@ -33,7 +32,8 @@ class SimpleMusic {
         const g = this.ctx.createGain();
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(notes[i % notes.length], this.ctx.currentTime);
-        g.gain.setValueAtTime(0.03, this.ctx.currentTime);
+        g.gain.setValueAtTime(0.02, this.ctx.currentTime);
+        // Corrected typo: exponentialRampToValueToTime -> exponentialRampToValueAtTime
         g.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.5);
         osc.connect(g);
         g.connect(this.ctx.destination);
@@ -83,16 +83,13 @@ const GooseCard: React.FC<{
 
   const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
     if (e.cancelable) e.preventDefault();
-    
-    // 如果被遮挡（黑白状态），点击仅触发抖动提示，不执行逻辑
-    if (item.isCovered || item.status !== 'board') {
+    if (item.isCovered || (item.status !== 'board' && item.status !== 'holding')) {
       if (item.status === 'board') {
         setIsWiggling(true);
         setTimeout(() => setIsWiggling(false), 300);
       }
       return;
     }
-    
     if (gooseType?.isGoose) {
       setIsHonking(true);
       setTimeout(() => setIsHonking(false), 800);
@@ -101,17 +98,14 @@ const GooseCard: React.FC<{
   };
 
   const getShaped3DStyle = (): React.CSSProperties => {
-    // 下层黑白动物样式：彻底置灰、低亮度、不具备3D厚度感
     if (item.isCovered) {
       return {
         filter: 'grayscale(1) brightness(0.4) opacity(0.6)',
         transform: `translateY(4px) scale(0.95)`,
-        transition: 'all 0.4s ease',
-        pointerEvents: 'auto', // 仍允许点击以显示抖动提示
+        transition: 'all 0.4s ease'
       };
     }
 
-    // 上层彩色动物样式：高亮彩色、具备3D厚度和投影
     const depth = isTray ? 0 : 6;
     let shadowStr = '';
     if (depth > 0) {
@@ -153,12 +147,9 @@ const GooseCard: React.FC<{
           <span className="text-base font-black text-red-600 italic whitespace-nowrap">嘎!!</span>
         </div>
       )}
-
       <span className={`select-none text-6xl transform transition-colors ${item.isCovered ? 'text-gray-400' : (gooseType?.color || 'text-white')}`}>
         {gooseType?.emoji}
       </span>
-      
-      {/* 仅上层BOSS显示徽章 */}
       {gooseType?.isGoose && !item.isCovered && !isTray && (
         <div className="absolute -top-2 -right-2 bg-yellow-500 text-[10px] font-black px-1.5 py-0.5 rounded-lg text-white shadow-lg border-2 border-white animate-bounce-subtle z-50">
           BOSS
@@ -179,11 +170,11 @@ const App: React.FC = () => {
   const [boosters, setBoosters] = useState({ undo: 3, shuffle: 3, clear: 2 });
   const [floatingScores, setFloatingScores] = useState<{ id: number; val: number; x: number; y: number }[]>([]);
   const [musicEnabled, setMusicEnabled] = useState(false);
+  const [isProcessingMatch, setIsProcessingMatch] = useState(false);
   
   const comboTimeout = useRef<number | null>(null);
   const currentLevel = LEVELS[Math.min(levelIdx, LEVELS.length - 1)];
 
-  // 核心遮挡逻辑
   const checkCoverage = useCallback((all: GameItem[]) => {
     return all.map(item => {
       if (item.status !== 'board') return { ...item, isCovered: false };
@@ -192,7 +183,7 @@ const App: React.FC = () => {
         isCovered: all.some(other => 
           other.status === 'board' && 
           other.z > item.z && 
-          Math.abs(other.x - item.x) < ITEM_SIZE * 0.55 && // 判定范围略大于图片，确保边缘也能遮挡
+          Math.abs(other.x - item.x) < ITEM_SIZE * 0.55 && 
           Math.abs(other.y - item.y) < ITEM_SIZE * 0.55
         )
       };
@@ -208,21 +199,22 @@ const App: React.FC = () => {
     const viewHeight = window.innerHeight;
     const SAFE_BOARD_HEIGHT = Math.min(BOARD_HEIGHT, viewHeight - 280); 
 
+    // 严格按 3 个一组生成，确保总量绝对平衡
     for (let i = 0; i < config.totalSets; i++) {
       const type = typesToUse[Math.floor(Math.random() * typesToUse.length)];
+      const layerBase = Math.floor(Math.random() * config.layers);
       for (let j = 0; j < 3; j++) {
-        const layer = Math.floor(Math.random() * config.layers);
         const gridX = Math.floor(Math.random() * 5);
         const gridY = Math.floor(Math.random() * 6); 
-        const offsetX = (Math.random() - 0.5) * 60;
-        const offsetY = (Math.random() - 0.5) * 60;
+        const offsetX = (Math.random() - 0.5) * 65;
+        const offsetY = (Math.random() - 0.5) * 65;
         
         generated.push({
           id: idCounter++,
           type: type.id,
           x: Math.max(10, Math.min(BOARD_WIDTH - ITEM_SIZE - 10, gridX * 60 + 20 + offsetX)),
           y: Math.max(10, Math.min(SAFE_BOARD_HEIGHT - ITEM_SIZE, gridY * 60 + 10 + offsetY)),
-          z: layer,
+          z: layerBase + j, // 略微错开层级
           status: 'board',
           isCovered: false
         });
@@ -235,60 +227,68 @@ const App: React.FC = () => {
     setGameState('playing');
     setScore(0);
     setCombo(0);
+    setIsProcessingMatch(false);
   }, [checkCoverage]);
 
   const handleItemClick = (clickedItem: GameItem) => {
-    if (gameState !== 'playing' || tray.length >= TRAY_SIZE || clickedItem.isCovered) return;
+    // 如果正在处理消除动画，或者托盘已满，禁止点击
+    if (gameState !== 'playing' || tray.length >= TRAY_SIZE || isProcessingMatch) return;
     
-    const newTray = [...tray, { ...clickedItem, status: 'tray' as const }];
-    const newItems = items.map(item => 
-      item.id === clickedItem.id ? { ...item, status: 'tray' as const } : item
-    );
+    // 移入托盘
+    const newTrayItem = { ...clickedItem, status: 'tray' as const };
+    setTray(prev => [...prev, newTrayItem]);
     
-    setItems(checkCoverage(newItems));
-    setTray(newTray);
-    
+    setItems(prev => {
+      const updated = prev.map(item => item.id === clickedItem.id ? { ...item, status: 'tray' as const } : item);
+      return checkCoverage(updated);
+    });
+
+    // 处理仓库移出逻辑
+    if (clickedItem.status === 'holding') {
+      setHoldingArea(prev => prev.filter(i => i.id !== clickedItem.id));
+    }
+
     setCombo(c => c + 1);
     if (comboTimeout.current) clearTimeout(comboTimeout.current);
-    comboTimeout.current = window.setTimeout(() => setCombo(0), 1200);
+    comboTimeout.current = window.setTimeout(() => setCombo(0), 1500);
   };
 
+  // 检测匹配逻辑优化：精确锁定 ID
   useEffect(() => {
-    if (tray.length === 0) return;
+    if (tray.length === 0 || isProcessingMatch) return;
+
     const counts: Record<string, number> = {};
     tray.forEach(i => counts[i.type] = (counts[i.type] || 0) + 1);
-    const match = Object.keys(counts).find(t => counts[t] >= 3);
-    if (match) {
+    
+    const matchType = Object.keys(counts).find(t => counts[t] >= 3);
+    if (matchType) {
+      setIsProcessingMatch(true); // 锁定
       setTimeout(() => {
-        const matchingType = GOOSE_TYPES.find(gt => gt.id === match);
-        const basePoints = matchingType?.points || 100;
-        const totalGain = basePoints + (combo * 150);
-        setFloatingScores(prev => [...prev, { id: Date.now(), val: totalGain, x: BOARD_WIDTH/2 - 20, y: BOARD_HEIGHT/2 }]);
-        setTray(prev => {
-          let count = 0;
-          const filtered = [];
-          for(const item of prev) {
-            if (item.type === match && count < 3) count++;
-            else filtered.push(item);
-          }
-          return filtered;
-        });
-        setItems(prev => prev.map(i => i.type === match && i.status === 'tray' ? { ...i, status: 'cleared' as const } : i));
+        // 1. 找到托盘中该类型的 前 3 个 ID
+        const matchingItemsInTray = tray.filter(i => i.type === matchType).slice(0, 3);
+        const matchingIds = matchingItemsInTray.map(i => i.id);
+
+        // 2. 更新 items 状态：仅清除这 3 个 ID
+        setItems(prev => prev.map(i => matchingIds.includes(i.id) ? { ...i, status: 'cleared' as const } : i));
+
+        // 3. 更新托盘：移除这 3 个 ID
+        setTray(prev => prev.filter(i => !matchingIds.includes(i.id)));
+
+        // 4. 加分
+        const typeInfo = GOOSE_TYPES.find(gt => gt.id === matchType);
+        const totalGain = (typeInfo?.points || 100) + (combo * 150);
         setScore(s => s + totalGain);
-      }, 300);
+        setFloatingScores(prev => [...prev, { id: Date.now(), val: totalGain, x: BOARD_WIDTH/2 - 20, y: BOARD_HEIGHT/2 }]);
+        
+        setIsProcessingMatch(false); // 解锁
+      }, 400); // 给一点动画缓冲时间
     } else if (tray.length === TRAY_SIZE) {
       setGameState('lost');
     }
-  }, [tray, combo]);
-
-  const toggleMusic = async () => {
-    if (musicEnabled) musicPlayer.stop();
-    else await musicPlayer.start();
-    setMusicEnabled(!musicEnabled);
-  };
+  }, [tray, combo, isProcessingMatch]);
 
   const useShuffle = () => {
-    if (boosters.shuffle <= 0) return;
+    if (boosters.shuffle <= 0 || isProcessingMatch) return;
     setItems(prev => {
       const boardItems = prev.filter(i => i.status === 'board');
       const types = boardItems.map(i => i.type).sort(() => Math.random() - 0.5);
@@ -300,26 +300,34 @@ const App: React.FC = () => {
   };
 
   const useUndo = () => {
-    if (boosters.undo <= 0 || tray.length === 0) return;
+    if (boosters.undo <= 0 || tray.length === 0 || isProcessingMatch) return;
     const last = tray[tray.length - 1];
     setTray(prev => prev.slice(0, -1));
     setItems(prev => {
-      const updated = prev.map(i => i.id === last.id ? { ...i, status: 'board' as const } : i);
+      const updated = prev.map(i => i.id === last.id ? { ...i, status: last.status === 'holding' ? 'holding' as const : 'board' as const } : i);
       return checkCoverage(updated);
     });
     setBoosters(b => ({ ...b, undo: b.undo - 1 }));
   };
 
   const useClear = () => {
-    if (boosters.clear <= 0 || tray.length < 3) return;
+    if (boosters.clear <= 0 || tray.length < 3 || isProcessingMatch) return;
     const toHold = tray.slice(0, 3);
     setTray(prev => prev.slice(3));
+    setItems(prev => prev.map(i => toHold.some(th => th.id === i.id) ? { ...i, status: 'holding' as const } : i));
     setHoldingArea(prev => [...prev, ...toHold.map(i => ({ ...i, status: 'holding' as const }))]);
     setBoosters(b => ({ ...b, clear: b.clear - 1 }));
   };
 
+  const toggleMusic = async () => {
+    if (musicEnabled) musicPlayer.stop();
+    else await musicPlayer.start();
+    setMusicEnabled(!musicEnabled);
+  };
+
+  // 胜利条件：所有生成的动物必须都变成 'cleared'
   useEffect(() => {
-    if (gameState === 'playing' && items.length > 0 && items.every(i => i.status === 'cleared' || i.status === 'holding')) {
+    if (gameState === 'playing' && items.length > 0 && items.every(i => i.status === 'cleared')) {
       setGameState('won');
     }
   }, [items, gameState]);
@@ -387,12 +395,28 @@ const App: React.FC = () => {
 
       {/* Bottom UI */}
       <div className="bg-white/90 backdrop-blur-3xl px-6 pt-4 pb-[calc(1rem+var(--sab))] rounded-t-[3rem] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] z-[150]">
-        <div className="flex justify-around mb-6 px-4 gap-2">
+        
+        {/* Booster Area */}
+        <div className="flex justify-around mb-4 px-4 gap-2">
           <BoosterBtn icon="🔙" label="撤销" count={boosters.undo} onClick={useUndo} color="from-blue-500 to-blue-700" />
           <BoosterBtn icon="🔀" label="洗牌" count={boosters.shuffle} onClick={useShuffle} color="from-purple-500 to-purple-700" />
           <BoosterBtn icon="🧺" label="移出" count={boosters.clear} onClick={useClear} color="from-orange-500 to-orange-700" />
         </div>
 
+        {/* Vault area (for items moved out) */}
+        {holdingArea.length > 0 && (
+          <div className="mb-4 flex gap-2 overflow-x-auto no-scrollbar p-2 bg-slate-100/50 rounded-2xl border border-dashed border-slate-300">
+            {holdingArea.map(item => (
+              <div key={item.id} className="relative w-10 h-10 shrink-0">
+                <div className="scale-[0.5] origin-top-left">
+                  <GooseCard item={item} onClick={handleItemClick} isTray />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tray area */}
         <div className="relative bg-slate-100 p-2.5 rounded-[2.5rem] border-b-4 border-slate-300 shadow-inner flex gap-1 justify-center items-center min-h-[64px]">
           {Array.from({ length: TRAY_SIZE }).map((_, i) => (
             <div key={i} className="flex-1 max-w-[42px] aspect-square bg-white/70 rounded-xl border border-dashed border-slate-300 flex items-center justify-center relative shadow-sm overflow-hidden">
@@ -403,6 +427,11 @@ const App: React.FC = () => {
               )}
             </div>
           ))}
+          {isProcessingMatch && (
+            <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] rounded-[2.5rem] flex items-center justify-center pointer-events-none">
+              <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
         </div>
       </div>
     </div>
