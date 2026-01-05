@@ -103,26 +103,27 @@ const GooseCard: React.FC<{
   const getShaped3DStyle = (): React.CSSProperties => {
     if (item.isCovered) {
       return {
-        filter: 'grayscale(1) brightness(0.2) opacity(0.5)',
+        filter: 'grayscale(1) brightness(0.2) contrast(1.2) opacity(0.6)',
         transform: `translateY(4px) scale(0.92)`,
-        transition: 'all 0.4s ease',
+        transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
       };
     }
 
-    const depth = isTray ? 0 : 6;
+    const depth = isTray ? 0 : 8; // 增加3D深度感
     let shadowStr = '';
     if (depth > 0) {
       for (let i = 1; i <= depth; i++) {
-        shadowStr += `0px ${i}px 0px rgba(0,0,0,0.2)${i === depth ? '' : ','}`;
+        // 多重层级投影模拟真实厚度
+        shadowStr += `0px ${i}px 0px rgba(0,0,0,0.25)${i === depth ? '' : ','}`;
       }
     }
 
     return {
-      textShadow: shadowStr,
+      boxShadow: shadowStr,
       transform: isTray 
         ? 'scale(0.85)' 
-        : `translateY(-6px) rotateZ(${item.id % 2 === 0 ? '2deg' : '-2deg'})`,
-      filter: isTray ? 'none' : 'drop-shadow(0 10px 8px rgba(0,0,0,0.2))',
+        : `translateY(-${depth}px) rotateZ(${item.id % 2 === 0 ? '1.5deg' : '-1.5deg'})`,
+      filter: isTray ? 'none' : 'drop-shadow(0 12px 10px rgba(0,0,0,0.15))',
       transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
     };
   };
@@ -131,9 +132,10 @@ const GooseCard: React.FC<{
     <div
       onClick={handleClick}
       onTouchEnd={handleClick}
-      className={`absolute flex items-center justify-center transition-all touch-none
+      className={`absolute flex items-center justify-center transition-all touch-none rounded-[28%]
         ${isWiggling ? 'animate-pulse' : ''}
-        ${isHonking ? 'scale-150 -rotate-12' : ''}`}
+        ${isHonking ? 'scale-125 rotate-6' : ''}
+        ${!item.isCovered && !isTray ? 'active:scale-90 active:translate-y-0' : ''}`}
       style={{
         width: ITEM_SIZE,
         height: ITEM_SIZE,
@@ -142,17 +144,38 @@ const GooseCard: React.FC<{
         zIndex: isTray ? 100 : item.z * 10,
         position: isTray ? 'relative' : 'absolute',
         cursor: item.isCovered ? 'not-allowed' : 'pointer',
+        background: item.isCovered 
+            ? '#334155' 
+            : `linear-gradient(135deg, white 0%, #f8fafc 100%)`, // 基础背景
+        border: item.isCovered ? '2px solid #1e293b' : '3px solid white',
         ...getShaped3DStyle()
       }}
     >
+      {/* 内部彩色渐变背景，体现3D果冻感 */}
+      {!item.isCovered && (
+        <div className={`absolute inset-1 rounded-[24%] bg-gradient-to-br ${gooseType?.gradient} opacity-20`} />
+      )}
+      
+      {/* 高光遮罩 */}
+      {!item.isCovered && (
+        <div className="absolute top-1 left-2 right-2 h-1/2 bg-gradient-to-b from-white/60 to-transparent rounded-[24%] pointer-events-none" />
+      )}
+
       {isHonking && (
-        <div className="absolute -top-16 bg-white border-4 border-black px-3 py-1 rounded-2xl shadow-2xl z-[300] animate-bounce text-xs font-black text-red-600">
-          嘎!!
+        <div className="absolute -top-16 bg-white border-4 border-black px-4 py-1.5 rounded-full shadow-2xl z-[300] animate-bounce text-sm font-black text-red-600">
+          GAAAA!!
         </div>
       )}
-      <span className={`select-none text-6xl transform transition-colors ${item.isCovered ? 'text-gray-600' : (gooseType?.color || 'text-white')}`}>
+      
+      <span className={`select-none text-6xl transform transition-transform duration-300 drop-shadow-md
+        ${item.isCovered ? 'text-gray-700 brightness-50' : 'animate-bounce-subtle'}`}>
         {gooseType?.emoji}
       </span>
+      
+      {/* 稀有度光芒 */}
+      {gooseType?.rarity === 'legendary' && !item.isCovered && (
+        <div className="absolute inset-0 border-4 border-yellow-400/50 rounded-[28%] animate-pulse" />
+      )}
     </div>
   );
 };
@@ -175,25 +198,20 @@ const App: React.FC = () => {
   const comboTimeout = useRef<number | null>(null);
   const currentLevel = LEVELS[Math.min(levelIdx, LEVELS.length - 1)];
 
-  // 响应式缩放计算优化
   const updateScale = useCallback(() => {
     if (gameAreaRef.current) {
       const containerWidth = gameAreaRef.current.clientWidth;
       const containerHeight = gameAreaRef.current.clientHeight;
-      
-      // 增加更多的内间距，确保安全
-      const scaleX = (containerWidth - 30) / BOARD_WIDTH;
-      const scaleY = (containerHeight - 30) / BOARD_HEIGHT;
-      // 取较小值进行等比例缩放，并设置上限
-      const finalScale = Math.min(scaleX, scaleY, 1.15); 
-      
+      const scaleX = (containerWidth - 20) / BOARD_WIDTH;
+      const scaleY = (containerHeight - 20) / BOARD_HEIGHT;
+      const finalScale = Math.min(scaleX, scaleY, 1.1); 
       setBoardScale(finalScale);
     }
   }, []);
 
   useLayoutEffect(() => {
     updateScale();
-    const timer = setTimeout(updateScale, 100); // 针对微信加载延迟的二次校验
+    const timer = setTimeout(updateScale, 150);
     window.addEventListener('resize', updateScale);
     return () => {
       window.removeEventListener('resize', updateScale);
@@ -209,8 +227,9 @@ const App: React.FC = () => {
         isCovered: all.some(other => 
           other.status === 'board' && 
           other.z > item.z && 
-          Math.abs(other.x - item.x) < ITEM_SIZE * 0.52 && 
-          Math.abs(other.y - item.y) < ITEM_SIZE * 0.52
+          // 覆盖检测基于稍微缩小的物理尺寸，以增加层次感
+          Math.abs(other.x - item.x) < ITEM_SIZE * 0.48 && 
+          Math.abs(other.y - item.y) < ITEM_SIZE * 0.48
         )
       };
     });
@@ -222,22 +241,19 @@ const App: React.FC = () => {
     let generated: RuntimeGameItem[] = [];
     let idCounter = 0;
     
-    // 大鹅生成逻辑：收紧生成范围，避免贴边
     for (let i = 0; i < config.totalSets; i++) {
       const type = typesToUse[Math.floor(Math.random() * typesToUse.length)];
       for (let j = 0; j < 3; j++) {
-        // 使用更集中的网格分布
         const gridX = Math.floor(Math.random() * 5);
         const gridY = Math.floor(Math.random() * 5); 
-        const offsetX = (Math.random() - 0.5) * 40;
-        const offsetY = (Math.random() - 0.5) * 60;
+        const offsetX = (Math.random() - 0.5) * 35;
+        const offsetY = (Math.random() - 0.5) * 55;
         
         generated.push({
           id: idCounter++,
           type: type.id,
-          // 逻辑坐标范围控制：X(10-270), Y(20-440)
-          x: Math.max(10, Math.min(BOARD_WIDTH - ITEM_SIZE - 10, gridX * 55 + 20 + offsetX)),
-          y: Math.max(20, Math.min(BOARD_HEIGHT - ITEM_SIZE - 20, gridY * 80 + 20 + offsetY)),
+          x: Math.max(8, Math.min(BOARD_WIDTH - ITEM_SIZE - 8, gridX * 60 + 15 + offsetX)),
+          y: Math.max(15, Math.min(BOARD_HEIGHT - ITEM_SIZE - 15, gridY * 90 + 20 + offsetY)),
           z: Math.floor(Math.random() * config.layers),
           status: 'board',
           isCovered: false
@@ -345,28 +361,28 @@ const App: React.FC = () => {
   }, [items, gameState]);
 
   return (
-    <div className={`flex flex-col h-full w-full max-w-2xl mx-auto bg-gradient-to-b ${currentLevel.bgGradient} transition-all duration-1000 overflow-hidden relative shadow-2xl`}>
+    <div className={`flex flex-col h-full w-full max-w-2xl mx-auto bg-gradient-to-b ${currentLevel.bgGradient} transition-all duration-1000 overflow-hidden relative shadow-2xl font-sans`}>
       
-      {/* HUD Header - flex-shrink-0 关键点 */}
-      <div className="flex-shrink-0 px-4 py-3 pt-[calc(0.75rem+var(--sat))] flex justify-between items-center bg-white/60 backdrop-blur-xl z-[100] border-b border-white/50">
+      {/* HUD Header */}
+      <div className="flex-shrink-0 px-5 py-4 pt-[calc(1rem+var(--sat))] flex justify-between items-center bg-white/70 backdrop-blur-2xl z-[100] border-b border-white shadow-sm">
         <div className="flex flex-col">
-          <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">{currentLevel.name}</span>
-          <span className="text-3xl font-black text-slate-900 drop-shadow-sm tabular-nums">{score}</span>
+          <span className="text-[11px] font-black text-slate-500 uppercase tracking-[0.1em]">{currentLevel.name}</span>
+          <span className="text-4xl font-black text-slate-900 drop-shadow-sm tabular-nums leading-none mt-1">{score}</span>
         </div>
-        <div className="flex items-center gap-2">
-           <button onClick={toggleMusic} className="w-10 h-10 rounded-xl bg-white/80 shadow-sm flex items-center justify-center text-xl border border-white active-press">
+        <div className="flex items-center gap-3">
+           <button onClick={toggleMusic} className="w-11 h-11 rounded-2xl bg-white shadow-md flex items-center justify-center text-2xl border border-white active-press transition-transform">
              {musicEnabled ? '🎵' : '🔇'}
            </button>
-           <div className="flex flex-col items-end">
-              <div className="bg-slate-900 text-white px-3 py-1 rounded-xl text-xs font-black shadow-lg">LV {levelIdx + 1}</div>
+           <div className="bg-slate-900 text-white px-4 py-2 rounded-2xl text-sm font-black shadow-xl ring-4 ring-slate-900/10">
+              LV {levelIdx + 1}
            </div>
         </div>
       </div>
 
-      {/* Game Area Container - flex-1 确保占据剩余空间且不溢出 */}
-      <div ref={gameAreaRef} className="relative flex-1 w-full overflow-hidden flex items-center justify-center p-2">
+      {/* Game Area Container */}
+      <div ref={gameAreaRef} className="relative flex-1 w-full overflow-hidden flex items-center justify-center p-3">
         <div 
-          className="relative origin-center transition-transform duration-300" 
+          className="relative origin-center transition-transform duration-500 ease-out" 
           style={{ 
             width: BOARD_WIDTH, 
             height: BOARD_HEIGHT,
@@ -383,16 +399,16 @@ const App: React.FC = () => {
 
         {/* Modal Overlay */}
         {gameState !== 'playing' && (
-          <div className="absolute inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-md px-6">
-            <div className="bg-white p-8 rounded-[3rem] shadow-2xl text-center w-full max-w-[300px] animate-in zoom-in-95 duration-300">
-              <div className="text-8xl mb-6">
+          <div className="absolute inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-xl px-6">
+            <div className="bg-white p-10 rounded-[3.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] text-center w-full max-w-[320px] animate-in zoom-in-95 fade-in duration-500">
+              <div className="text-9xl mb-8 transform hover:scale-110 transition-transform cursor-default filter drop-shadow-2xl">
                 {gameState === 'won' ? '🥇' : (gameState === 'lost' ? '😵' : '🪿')}
               </div>
-              <h2 className="text-3xl font-black mb-2 text-slate-900">
-                {gameState === 'won' ? '鹅中之神!' : (gameState === 'lost' ? '槽位爆满!' : '抓大鹅大师')}
+              <h2 className="text-4xl font-black mb-3 text-slate-900 tracking-tight">
+                {gameState === 'won' ? '神之一手!' : (gameState === 'lost' ? '哎呀挤爆了!' : '抓大鹅大师')}
               </h2>
-              <p className="text-slate-500 mb-8 text-sm font-bold leading-relaxed px-4">
-                {gameState === 'won' ? '你征服了所有的大鹅，快去下一关吧！' : '灰黑色的动物无法抓取，请先清理上面的动物。'}
+              <p className="text-slate-500 mb-10 text-base font-bold leading-relaxed px-2">
+                {gameState === 'won' ? '你的抓鹅技巧已经炉火纯青，敢挑战下一关吗？' : '槽位满了！灰黑色的动物无法抓取，请先清理顶层的动物。'}
               </p>
               <button 
                 onClick={async () => {
@@ -404,50 +420,51 @@ const App: React.FC = () => {
                     initLevel(levelIdx);
                   }
                 }}
-                className="w-full py-4 bg-slate-900 text-white font-black text-2xl rounded-[2rem] shadow-xl active:translate-y-1 transition-all"
+                className="w-full py-5 bg-gradient-to-r from-slate-900 to-slate-800 text-white font-black text-2xl rounded-[2.5rem] shadow-2xl active:translate-y-1 transition-all hover:brightness-110 ring-8 ring-slate-900/5"
               >
-                {gameState === 'start' ? '立刻出发' : '重战江湖'}
+                {gameState === 'start' ? '开始捕捉' : '再来一局'}
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom UI - flex-shrink-0 关键点 */}
-      <div className="flex-shrink-0 bg-white/90 backdrop-blur-3xl px-4 pt-4 pb-[calc(1rem+var(--sab))] rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.08)] z-[150] border-t border-white/50">
+      {/* Bottom UI */}
+      <div className="flex-shrink-0 bg-white/95 backdrop-blur-3xl px-5 pt-5 pb-[calc(1.2rem+var(--sab))] rounded-t-[3.5rem] shadow-[0_-15px_50px_rgba(0,0,0,0.12)] z-[150] border-t border-white">
         
-        <div className="flex justify-around mb-4 px-2 gap-2">
-          <BoosterBtn icon="🔙" label="撤销" count={boosters.undo} onClick={useUndo} color="from-blue-500 to-blue-700" />
-          <BoosterBtn icon="🔀" label="洗牌" count={boosters.shuffle} onClick={useShuffle} color="from-purple-500 to-purple-700" />
-          <BoosterBtn icon="🧺" label="移出" count={boosters.clear} onClick={useClear} color="from-orange-500 to-orange-700" />
+        <div className="flex justify-around mb-6 px-1 gap-4">
+          <BoosterBtn icon="🔙" label="撤销" count={boosters.undo} onClick={useUndo} color="from-sky-400 to-blue-600" />
+          <BoosterBtn icon="🔀" label="洗牌" count={boosters.shuffle} onClick={useShuffle} color="from-fuchsia-400 to-purple-600" />
+          <BoosterBtn icon="🧺" label="仓库" count={boosters.clear} onClick={useClear} color="from-amber-400 to-orange-600" />
         </div>
 
         {holdingArea.length > 0 && (
-          <div className="mb-4 flex gap-1.5 overflow-x-auto no-scrollbar p-2 bg-slate-100/60 rounded-2xl border border-dashed border-slate-300 items-center h-14">
+          <div className="mb-5 flex gap-2 overflow-x-auto no-scrollbar p-3 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 items-center h-16 shadow-inner">
             {holdingArea.map(item => (
-              <div key={item.id} className="relative w-10 h-10 shrink-0">
+              <div key={item.id} className="relative w-11 h-11 shrink-0">
                 <div className="scale-[0.45] origin-top-left">
                   <GooseCard item={item} onClick={handleItemClick} isTray />
                 </div>
               </div>
             ))}
-            <span className="text-[10px] font-black text-slate-400 ml-auto pr-2 uppercase italic">仓库</span>
+            <span className="text-[11px] font-black text-slate-300 ml-auto pr-3 uppercase italic tracking-widest">TEMPORARY</span>
           </div>
         )}
 
-        <div className="relative bg-slate-100 p-2 rounded-[2rem] border-b-4 border-slate-300 shadow-inner flex gap-1 justify-center items-center min-h-[68px]">
+        {/* Tray - 槽位设计升级 */}
+        <div className="relative bg-slate-50 p-2.5 rounded-[2.5rem] border-b-8 border-slate-200 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] flex gap-1.5 justify-center items-center min-h-[78px]">
           {Array.from({ length: TRAY_SIZE }).map((_, i) => (
-            <div key={i} className="flex-1 max-w-[44px] aspect-square bg-white/70 rounded-xl border border-dashed border-slate-300 flex items-center justify-center relative shadow-sm overflow-hidden">
+            <div key={i} className="flex-1 max-w-[48px] aspect-square bg-white/80 rounded-2xl border-2 border-white shadow-sm flex items-center justify-center relative overflow-visible ring-1 ring-slate-100">
               {tray[i] && (
-                <div className="transform scale-[0.65] animate-in zoom-in slide-in-from-top-4 duration-300">
+                <div className="transform scale-[0.55] animate-in zoom-in fade-in slide-in-from-bottom-2 duration-300">
                    <GooseCard item={tray[i]} onClick={() => {}} isTray />
                 </div>
               )}
             </div>
           ))}
           {isProcessingMatch && (
-            <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] rounded-[2rem] flex items-center justify-center pointer-events-none">
-              <div className="w-5 h-5 border-3 border-slate-400 border-t-transparent rounded-full animate-spin" />
+            <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] rounded-[2.5rem] flex items-center justify-center pointer-events-none z-[160]">
+               <div className="w-6 h-6 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
         </div>
@@ -460,12 +477,12 @@ const BoosterBtn: React.FC<{ icon: string; label: string; count: number; onClick
   <button 
     onClick={onClick} 
     disabled={count <= 0}
-    className="group flex flex-col items-center gap-1 disabled:opacity-25 transition-all active-press"
+    className="group flex flex-col items-center gap-2 disabled:opacity-30 transition-all active-press"
   >
-    <div className={`w-12 h-12 bg-gradient-to-br ${color} rounded-2xl flex items-center justify-center text-xl shadow-lg text-white border-b-2 border-black/10`}>
+    <div className={`w-14 h-14 bg-gradient-to-br ${color} rounded-2xl flex items-center justify-center text-2xl shadow-xl text-white border-b-4 border-black/20 ring-4 ring-white`}>
       {icon}
     </div>
-    <span className="text-[10px] font-black text-slate-500">{label}({count})</span>
+    <span className="text-[11px] font-black text-slate-500 tracking-wide">{label}({count})</span>
   </button>
 );
 
